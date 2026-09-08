@@ -6,7 +6,7 @@ import {
   useVoiceAssistant,
   useTranscriptions,
 } from '@livekit/components-react';
-import { PhoneCall, PhoneOff, Activity, MessageSquare } from 'lucide-react';
+import { PhoneCall, PhoneOff, Activity, MessageSquare, AlertCircle } from 'lucide-react';
 
 export default function App() {
   const [url, setUrl] = useState('');
@@ -15,18 +15,20 @@ export default function App() {
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // Fetch token from agent token server or use manual inputs
-  const handleFetchTokenAndConnect = async () => {
+  const handleConnect = async () => {
     setLoading(true);
     setError(null);
     try {
+      // If user provided manual inputs, connect directly
       if (url && token) {
         setConnected(true);
         setLoading(false);
         return;
       }
 
+      // Automatically fetch room URL & Token from agent backend helper endpoint
       let res;
       try {
         res = await fetch(`/api/token?roomName=${encodeURIComponent(roomName)}`);
@@ -35,26 +37,22 @@ export default function App() {
       }
 
       if (!res.ok) {
-        throw new Error(`Token server returned status ${res.status}`);
+        throw new Error(`Token server error (status ${res.status}). Ensure python agent.py dev is running.`);
       }
+
       const data = await res.json();
       if (!data.token || !data.url) {
-        throw new Error("Invalid token server payload");
+        throw new Error("Invalid token response from server.");
       }
-      
+
       setUrl(data.url);
       setToken(data.token);
       setConnected(true);
     } catch (err) {
-      console.warn("Auto-token generation notice:", err);
-      if (url && token) {
-        setConnected(true);
-      } else {
-        setError(
-          "Could not auto-generate token. " +
-          "Ensure 'python agent.py dev' (or 'python agent.py token-server') is running, or paste LiveKit URL & Token manually."
-        );
-      }
+      console.warn("Auto-connect warning:", err);
+      setError(
+        "Could not connect to Python backend. Please make sure 'python agent.py dev' is actively running in your terminal!"
+      );
     } finally {
       setLoading(false);
     }
@@ -71,61 +69,98 @@ export default function App() {
           <div className="logo-icon">Q</div>
           <div>
             <h1>Quickcue</h1>
-            <div className="subtitle">Hands-Free Voice Assistant Baseline</div>
+            <div className="subtitle">Hands-Free Voice Assistant Copilot</div>
           </div>
         </div>
         <div className="status-indicator">
           <div className={`dot ${connected ? 'connected' : loading ? 'connecting' : ''}`} />
-          <span>{connected ? 'Live Session' : loading ? 'Connecting...' : 'Disconnected'}</span>
+          <span>{connected ? 'Live Voice Session' : loading ? 'Connecting...' : 'Disconnected'}</span>
         </div>
       </header>
 
       {!connected ? (
-        <div className="card">
-          <h2 style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>Connection & Credentials</h2>
-          
+        <div className="card" style={{ textAlign: 'center', padding: '2.5rem 1.5rem' }}>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+            Ready for Hands-Free Guidance
+          </h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginBottom: '2rem', maxWidth: '550px', margin: '0 auto 2rem' }}>
+            Click below to establish a live voice link with Quickcue. Make sure <code>python agent.py dev</code> is running in your terminal.
+          </p>
+
           {error && (
-            <div style={{ padding: '0.75rem', background: '#451A1A', border: '1px solid #7F1D1D', borderRadius: '8px', color: '#FCA5A5', marginBottom: '1rem', fontSize: '0.85rem' }}>
-              {error}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              maxWidth: '600px',
+              margin: '0 auto 1.5rem',
+              padding: '1rem',
+              background: '#451A1A',
+              border: '1px solid #7F1D1D',
+              borderRadius: '10px',
+              color: '#FCA5A5',
+              fontSize: '0.9rem',
+              textAlign: 'left'
+            }}>
+              <AlertCircle size={22} style={{ flexShrink: 0 }} />
+              <div>{error}</div>
             </div>
           )}
 
-          <div className="inputs-row">
-            <div className="form-group">
-              <label>LiveKit Cloud WSS URL (optional if using token-server)</label>
-              <input
-                type="text"
-                placeholder="wss://your-project.livekit.cloud"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-              />
-            </div>
-            <div className="form-group">
-              <label>Room Name</label>
-              <input
-                type="text"
-                value={roomName}
-                onChange={(e) => setRoomName(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-            <label>Access Token (optional if using token-server)</label>
-            <input
-              type="text"
-              placeholder="Paste token or leave empty to fetch via token-server"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-            />
-          </div>
-
-          <div className="controls-bar">
-            <button className="btn btn-primary" onClick={handleFetchTokenAndConnect} disabled={loading}>
-              <PhoneCall size={18} />
-              {loading ? 'Connecting...' : 'Connect to Voice Assistant'}
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
+            <button
+              className="btn btn-primary"
+              onClick={handleConnect}
+              disabled={loading}
+              style={{ fontSize: '1.1rem', padding: '1rem 2.5rem', borderRadius: '12px' }}
+            >
+              <PhoneCall size={22} />
+              {loading ? 'Connecting to Agent...' : 'Start Voice Assistant'}
             </button>
           </div>
+
+          <div style={{ marginTop: '1rem' }}>
+            <button
+              type="button"
+              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.85rem', cursor: 'pointer', textDecoration: 'underline' }}
+              onClick={() => setShowAdvanced(!showAdvanced)}
+            >
+              {showAdvanced ? 'Hide Advanced Credentials' : 'Show Advanced Credentials (Manual Override)'}
+            </button>
+          </div>
+
+          {showAdvanced && (
+            <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'var(--bg-accent)', borderRadius: '10px', textAlign: 'left' }}>
+              <div className="inputs-row">
+                <div className="form-group">
+                  <label>LiveKit WSS URL</label>
+                  <input
+                    type="text"
+                    placeholder="wss://your-project.livekit.cloud"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Room Name</label>
+                  <input
+                    type="text"
+                    value={roomName}
+                    onChange={(e) => setRoomName(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Access Token</label>
+                <input
+                  type="text"
+                  placeholder="Paste manual access token..."
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <LiveKitRoom
@@ -161,7 +196,7 @@ function VoiceAssistantSession({ onDisconnect }) {
       <div className="controls-bar">
         <button className="btn btn-danger" onClick={onDisconnect}>
           <PhoneOff size={18} />
-          Disconnect
+          Disconnect Session
         </button>
         <VoiceAssistantControlBar controls={{ leave: false }} />
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
@@ -180,9 +215,9 @@ function VoiceAssistantSession({ onDisconnect }) {
       <div className="transcript-list">
         {allTranscriptions.length === 0 ? (
           <div className="empty-state">
-            <Activity size={32} color="var(--primary)" style={{ opacity: 0.6 }} />
-            <p>Start speaking into your microphone.</p>
-            <span style={{ fontSize: '0.8rem' }}>Quickcue will listen and respond with spoken audio.</span>
+            <Activity size={36} color="var(--primary)" style={{ opacity: 0.7 }} />
+            <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>Quickcue is listening...</p>
+            <span style={{ fontSize: '0.85rem' }}>Speak your field or lab question into your microphone.</span>
           </div>
         ) : (
           allTranscriptions.map((t, idx) => {
