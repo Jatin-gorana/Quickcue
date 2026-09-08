@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -8,7 +9,11 @@ from dotenv import load_dotenv
 
 from aiohttp import web
 from livekit.agents import JobContext, WorkerOptions, cli, llm, metrics
-from livekit.agents.pipeline import VoicePipelineAgent
+try:
+    from livekit.agents.pipeline import VoicePipelineAgent
+except ImportError:
+    from livekit.agents.voice import AgentSession as VoicePipelineAgent
+
 from livekit.api import AccessToken, VideoGrants
 from livekit.plugins import groq, rime, silero
 
@@ -25,6 +30,7 @@ if missing_envs:
     logger.warning(f"Missing environment variables: {', '.join(missing_envs)}. Ensure these are populated in .env")
 
 LOG_FILE = "latency_log.jsonl"
+TOKEN_SERVER_STARTED = False
 
 
 class TurnLatencyTracker:
@@ -69,7 +75,64 @@ class TurnLatencyTracker:
             self.current_turn = None
 
 
+# CORS-enabled Token Server Handler
+async def token_handler(request):
+    cors_headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "*",
+    }
+
+    if request.method == "OPTIONS":
+        return web.Response(status=204, headers=cors_headers)
+
+    room_name = request.query.get("roomName", "quickcue-room")
+    participant_name = request.query.get("participantName", "tech-user")
+
+    api_key = os.getenv("LIVEKIT_API_KEY")
+    api_secret = os.getenv("LIVEKIT_API_SECRET")
+    livekit_url = os.getenv("LIVEKIT_URL")
+
+    if not api_key or not api_secret:
+        return web.json_response({"error": "LIVEKIT_API_KEY or LIVEKIT_API_SECRET not set"}, status=500, headers=cors_headers)
+
+    grant = VideoGrants(
+        room_join=True,
+        room=room_name,
+        can_publish=True,
+        can_subscribe=True,
+    )
+    token = AccessToken(api_key, api_secret).with_identity(participant_name).with_grants(grant).to_jwt()
+
+    return web.json_response({
+        "token": token,
+        "url": livekit_url,
+        "roomName": room_name,
+    }, headers=cors_headers)
+
+
+async def ensure_token_server_running(port=8080):
+    global TOKEN_SERVER_STARTED
+    if TOKEN_SERVER_STARTED:
+        return
+    TOKEN_SERVER_STARTED = True
+    app = web.Application()
+    app.router.add_route("GET", "/api/token", token_handler)
+    app.router.add_route("OPTIONS", "/api/token", token_handler)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    try:
+        await site.start()
+        logger.info(f"Token helper server running at http://localhost:{port}/api/token")
+    except Exception as e:
+        logger.warning(f"Could not start embedded token server on port {port}: {e}")
+
+
 async def entrypoint(ctx: JobContext):
+    # Auto-start embedded token server on session start
+    await ensure_token_server_running(8080)
+
     logger.info(f"Connecting agent to LiveKit room: {ctx.room.name}")
     await ctx.connect()
 
@@ -137,37 +200,11 @@ async def entrypoint(ctx: JobContext):
     await agent.say("Quickcue active. Ready for your field questions.", allow_interruptions=True)
 
 
-# Local Token Server for Browser Frontend Testing
-async def token_handler(request):
-    room_name = request.query.get("roomName", "quickcue-room")
-    participant_name = request.query.get("participantName", "tech-user")
-
-    api_key = os.getenv("LIVEKIT_API_KEY")
-    api_secret = os.getenv("LIVEKIT_API_SECRET")
-    livekit_url = os.getenv("LIVEKIT_URL")
-
-    if not api_key or not api_secret:
-        return web.json_response({"error": "LIVEKIT_API_KEY or LIVEKIT_API_SECRET not set"}, status=500)
-
-    grant = VideoGrants(
-        room_join=True,
-        room=room_name,
-        can_publish=True,
-        can_subscribe=True,
-    )
-    token = AccessToken(api_key, api_secret).with_identity(participant_name).with_grants(grant).to_jwt()
-
-    return web.json_response({
-        "token": token,
-        "url": livekit_url,
-        "roomName": room_name,
-    }, headers={"Access-Control-Allow-Origin": "*"})
-
-
 def run_token_server(port=8080):
     app = web.Application()
-    app.router.add_get("/api/token", token_handler)
-    logger.info(f"Starting token helper server at http://localhost:{port}/api/token")
+    app.router.add_route("GET", "/api/token", token_handler)
+    app.router.add_route("OPTIONS", "/api/token", token_handler)
+    logger.info(f"Starting standalone token helper server at http://localhost:{port}/api/token")
     web.run_app(app, port=port)
 
 

@@ -4,7 +4,7 @@ import {
   RoomAudioRenderer,
   VoiceAssistantControlBar,
   useVoiceAssistant,
-  useTranscripts,
+  useTranscriptions,
 } from '@livekit/components-react';
 import { PhoneCall, PhoneOff, Activity, MessageSquare } from 'lucide-react';
 
@@ -16,20 +16,24 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Fetch token from local agent token server or use manual inputs
+  // Fetch token from agent token server or use manual inputs
   const handleFetchTokenAndConnect = async () => {
     setLoading(true);
     setError(null);
     try {
-      // If token & url are manually provided, connect directly
       if (url && token) {
         setConnected(true);
         setLoading(false);
         return;
       }
 
-      // Try local token server helper
-      const res = await fetch(`http://localhost:8080/api/token?roomName=${encodeURIComponent(roomName)}`);
+      let res;
+      try {
+        res = await fetch(`/api/token?roomName=${encodeURIComponent(roomName)}`);
+      } catch {
+        res = await fetch(`http://localhost:8080/api/token?roomName=${encodeURIComponent(roomName)}`);
+      }
+
       if (!res.ok) {
         throw new Error(`Token server returned status ${res.status}`);
       }
@@ -47,8 +51,8 @@ export default function App() {
         setConnected(true);
       } else {
         setError(
-          "Could not auto-generate token from http://localhost:8080/api/token. " +
-          "Ensure 'python agent.py token-server' is running in another terminal, or fill in LiveKit URL & Token manually."
+          "Could not auto-generate token. " +
+          "Ensure 'python agent.py dev' (or 'python agent.py token-server') is running, or paste LiveKit URL & Token manually."
         );
       }
     } finally {
@@ -142,8 +146,15 @@ export default function App() {
 }
 
 function VoiceAssistantSession({ onDisconnect }) {
-  const { state } = useVoiceAssistant();
-  const transcripts = useTranscripts();
+  const { state, agentTranscriptions } = useVoiceAssistant();
+  const transcriptions = useTranscriptions();
+
+  const allTranscriptions = transcriptions.length > 0
+    ? transcriptions
+    : (agentTranscriptions || []).map((seg) => ({
+        text: seg.text,
+        participantInfo: { identity: 'Agent' },
+      }));
 
   return (
     <div className="card transcript-section">
@@ -167,24 +178,29 @@ function VoiceAssistantSession({ onDisconnect }) {
       </div>
 
       <div className="transcript-list">
-        {transcripts.length === 0 ? (
+        {allTranscriptions.length === 0 ? (
           <div className="empty-state">
             <Activity size={32} color="var(--primary)" style={{ opacity: 0.6 }} />
             <p>Start speaking into your microphone.</p>
             <span style={{ fontSize: '0.8rem' }}>Quickcue will listen and respond with spoken audio.</span>
           </div>
         ) : (
-          transcripts.map((t, idx) => (
-            <div
-              key={idx}
-              className={`transcript-item ${t.participant?.isAgent ? 'agent' : 'user'}`}
-            >
-              <span className="speaker-label">
-                {t.participant?.isAgent ? 'Quickcue Copilot' : 'Technician'}
-              </span>
-              <span className="speech-text">{t.text}</span>
-            </div>
-          ))
+          allTranscriptions.map((t, idx) => {
+            const isAgent =
+              t.participantInfo?.identity?.toLowerCase().includes('agent') ||
+              t.streamInfo?.attributes?.['livekit.agent.state'] !== undefined;
+            return (
+              <div
+                key={idx}
+                className={`transcript-item ${isAgent ? 'agent' : 'user'}`}
+              >
+                <span className="speaker-label">
+                  {isAgent ? 'Quickcue Copilot' : t.participantInfo?.identity || 'Technician'}
+                </span>
+                <span className="speech-text">{t.text}</span>
+              </div>
+            );
+          })
         )}
       </div>
     </div>
