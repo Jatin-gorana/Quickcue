@@ -79,7 +79,7 @@ class TurnLatencyTracker:
             self.current_turn = None
 
 
-# CORS-enabled Token Server Handler with automatic Agent Dispatch
+# CORS-enabled Token Server Handler with single-dispatch check
 async def token_handler(request):
     cors_headers = {
         "Access-Control-Allow-Origin": "*",
@@ -100,12 +100,16 @@ async def token_handler(request):
     if not api_key or not api_secret:
         return web.json_response({"error": "LIVEKIT_API_KEY or LIVEKIT_API_SECRET missing in .env"}, status=500, headers=cors_headers)
 
-    # Dispatch the Quickcue Agent worker to the room in LiveKit Cloud
+    # Ensure only ONE dispatch is created for the room to prevent Rust FFI job race conditions
     try:
         lk_api = LiveKitAPI(livekit_url, api_key, api_secret)
-        await lk_api.agent_dispatch.create_dispatch(CreateAgentDispatchRequest(room=room_name))
+        existing_dispatches = await lk_api.agent_dispatch.list_dispatch(room_name)
+        if not existing_dispatches:
+            await lk_api.agent_dispatch.create_dispatch(CreateAgentDispatchRequest(room=room_name))
+            logger.info(f"📢 Created LiveKit Agent Dispatch for room '{room_name}'")
+        else:
+            logger.info(f"ℹ️ Reusing existing Agent Dispatch for room '{room_name}'")
         await lk_api.aclose()
-        logger.info(f"📢 Created LiveKit Agent Dispatch for room '{room_name}'")
     except Exception as e:
         logger.warning(f"Agent dispatch notice: {e}")
 
@@ -144,6 +148,17 @@ async def entrypoint(ctx: JobContext):
     await ctx.connect()
     logger.info(f"✅ Connected Quickcue Agent to LiveKit room: {ctx.room.name}")
 
+    # Set participant attributes for observable speech provider in frontend UI
+    try:
+        if hasattr(ctx.room.local_participant, "set_attributes"):
+            await ctx.room.local_participant.set_attributes({
+                "active_tts": "Rime mistv3 (astra)",
+                "active_stt": "Groq whisper-large-v3-turbo",
+                "active_llm": "Groq openai/gpt-oss-20b",
+            })
+    except Exception as attr_err:
+        logger.debug(f"Attribute set notice: {attr_err}")
+
     system_prompt = (
         "You are Quickcue, a calm, concise hands-free lab and field copilot for technicians. "
         "Technicians speak to you while performing physical tasks with their hands occupied. "
@@ -160,8 +175,8 @@ async def entrypoint(ctx: JobContext):
     logger.info("⚙️ Initializing Groq STT (whisper-large-v3-turbo)...")
     stt_provider = groq.STT(model="whisper-large-v3-turbo")
 
-    logger.info("⚙️ Initializing Groq LLM (groq/compound-mini)...")
-    llm_provider = groq.LLM(model="groq/compound-mini")
+    logger.info("⚙️ Initializing Groq LLM (openai/gpt-oss-20b)...")
+    llm_provider = groq.LLM(model="openai/gpt-oss-20b")
 
     logger.info("⚙️ Initializing Rime TTS (mistv3, speaker=astra)...")
     tts_provider = rime.TTS(model="mistv3", speaker="astra")
@@ -192,7 +207,7 @@ async def entrypoint(ctx: JobContext):
 
     @session.on("user_started_speaking")
     def _on_user_started_speaking():
-        logger.info("🎤 User started speaking into microphone...")
+        logger.info("🎤 User started speaking into microphone (Full-Duplex Interruption Active)...")
 
     @session.on("user_stopped_speaking")
     def _on_user_stopped_speaking():
@@ -207,7 +222,7 @@ async def entrypoint(ctx: JobContext):
 
     @session.on("agent_started_speaking")
     def _on_agent_started_speaking():
-        logger.info("🔊 Agent started emitting spoken audio (Rime TTS)...")
+        logger.info("🔊 Agent started emitting spoken audio (Rime TTS mistv3)...")
         tracker.record("audio_playback_start_ts")
 
     @session.on("agent_stopped_speaking")
@@ -215,7 +230,6 @@ async def entrypoint(ctx: JobContext):
         logger.info("🔇 Agent finished speaking response.")
         tracker.finish_turn()
 
-    # Start the agent session properly WITH await!
     if agent_def is not None:
         await session.start(agent=agent_def, room=ctx.room)
     else:

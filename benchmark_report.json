@@ -1,0 +1,46 @@
+{
+  "timestamp": "2026-09-09T17:34:04.599755+00:00",
+  "provider_config": {
+    "stt": "groq/whisper-large-v3-turbo",
+    "llm": "groq/openai/gpt-oss-20b",
+    "tts": "rime/mistv3 (speaker: astra)",
+    "vad": "silero/vad"
+  },
+  "averages": {
+    "avg_llm_ttft_ms": 1100.05,
+    "avg_rime_tts_ttfb_ms": 656.11,
+    "avg_total_turn_latency_ms": 1956.16
+  },
+  "turn_details": [
+    {
+      "turn_id": 1,
+      "query": "What buffer solutions do I need for pH probe calibration?",
+      "response": "",
+      "stt_estimated_ms": 200.0,
+      "llm_ttft_ms": 2151.77,
+      "llm_total_ms": 2188.09,
+      "rime_tts_ttfb_ms": 840.6,
+      "total_turn_latency_ms": 3192.37
+    },
+    {
+      "turn_id": 2,
+      "query": "If buffer solution 10 touches my skin, what is the safety protocol?",
+      "response": "",
+      "stt_estimated_ms": 200.0,
+      "llm_ttft_ms": 401.87,
+      "llm_total_ms": 427.45,
+      "rime_tts_ttfb_ms": 826.67,
+      "total_turn_latency_ms": 1428.54
+    },
+    {
+      "turn_id": 3,
+      "query": "What is the acceptable slope percentage range for a calibrated probe?",
+      "response": "",
+      "stt_estimated_ms": 200.0,
+      "llm_ttft_ms": 746.5,
+      "llm_total_ms": 772.17,
+      "rime_tts_ttfb_ms": 301.07,
+      "total_turn_latency_ms": 1247.57
+    }
+  ]
+}

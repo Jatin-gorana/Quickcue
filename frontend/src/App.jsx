@@ -6,7 +6,7 @@ import {
   useVoiceAssistant,
   useTranscriptions,
 } from '@livekit/components-react';
-import { PhoneCall, PhoneOff, Activity, MessageSquare, AlertCircle } from 'lucide-react';
+import { PhoneCall, PhoneOff, Activity, MessageSquare, AlertCircle, Zap, Volume2, Cpu, ShieldCheck } from 'lucide-react';
 
 export default function App() {
   const [url, setUrl] = useState('');
@@ -21,14 +21,12 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      // If user provided manual inputs, connect directly
       if (url && token) {
         setConnected(true);
         setLoading(false);
         return;
       }
 
-      // Automatically fetch room URL & Token from agent backend helper endpoint
       let res;
       try {
         res = await fetch(`/api/token?roomName=${encodeURIComponent(roomName)}`);
@@ -69,7 +67,7 @@ export default function App() {
           <div className="logo-icon">Q</div>
           <div>
             <h1>Quickcue</h1>
-            <div className="subtitle">Hands-Free Voice Assistant Copilot</div>
+            <div className="subtitle">Hands-Free Voice Assistant Copilot for Technicians</div>
           </div>
         </div>
         <div className="status-indicator">
@@ -83,9 +81,24 @@ export default function App() {
           <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '0.5rem' }}>
             Ready for Hands-Free Guidance
           </h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginBottom: '2rem', maxWidth: '550px', margin: '0 auto 2rem' }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginBottom: '1.5rem', maxWidth: '550px', margin: '0 auto 1.5rem' }}>
             Click below to establish a live voice link with Quickcue. Make sure <code>python agent.py dev</code> is running in your terminal.
           </p>
+
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '2rem' }}>
+            <div className="provider-chip">
+              <Volume2 size={14} color="var(--primary)" />
+              <span>Primary TTS: <strong>Rime mistv3 (astra)</strong></span>
+            </div>
+            <div className="provider-chip">
+              <Zap size={14} color="#EAB308" />
+              <span>STT / LLM: <strong>Groq Whisper + Compound Mini</strong></span>
+            </div>
+            <div className="provider-chip">
+              <ShieldCheck size={14} color="var(--success)" />
+              <span>Interruption: <strong>Full-Duplex Active</strong></span>
+            </div>
+          </div>
 
           {error && (
             <div style={{
@@ -199,9 +212,35 @@ function VoiceAssistantSession({ onDisconnect }) {
           Disconnect Session
         </button>
         <VoiceAssistantControlBar controls={{ leave: false }} />
+
+        <div className="active-provider-badge">
+          <Volume2 size={14} color="#38BDF8" />
+          <span>Active TTS: <strong>Rime mistv3 (astra)</strong></span>
+        </div>
+
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
           <Activity size={16} color="var(--primary)" />
           <span>Status: <strong>{state || 'listening'}</strong></span>
+        </div>
+      </div>
+
+      {/* Latency & Architecture Observability Bar */}
+      <div className="observability-bar">
+        <div className="metric-item">
+          <Cpu size={14} color="#38BDF8" />
+          <span>STT Engine: <strong>Groq Whisper Large v3</strong></span>
+        </div>
+        <div className="metric-item">
+          <Zap size={14} color="#EAB308" />
+          <span>LLM Engine: <strong>Groq Compound-Mini</strong></span>
+        </div>
+        <div className="metric-item">
+          <Volume2 size={14} color="#22C55E" />
+          <span>TTS Engine: <strong>Rime mistv3 (astra)</strong></span>
+        </div>
+        <div className="metric-item">
+          <ShieldCheck size={14} color="#A855F7" />
+          <span>Barge-in: <strong>Full-Duplex Active</strong></span>
         </div>
       </div>
 
@@ -230,7 +269,7 @@ function VoiceAssistantSession({ onDisconnect }) {
                 className={`transcript-item ${isAgent ? 'agent' : 'user'}`}
               >
                 <span className="speaker-label">
-                  {isAgent ? 'Quickcue Copilot' : t.participantInfo?.identity || 'Technician'}
+                  {isAgent ? 'Quickcue Copilot (Rime TTS)' : t.participantInfo?.identity || 'Technician'}
                 </span>
                 <span className="speech-text">{t.text}</span>
               </div>

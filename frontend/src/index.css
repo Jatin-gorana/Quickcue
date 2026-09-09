@@ -36,7 +36,7 @@ body {
 }
 
 .container {
-  max-width: 900px;
+  max-width: 950px;
   margin: 0 auto;
   padding: 2rem 1.5rem;
   width: 100%;
@@ -279,4 +279,46 @@ input {
 input:focus {
   outline: none;
   border-color: var(--primary);
+}
+
+.provider-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--bg-accent);
+  border: 1px solid var(--border);
+  padding: 0.4rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  color: var(--text-main);
+}
+
+.active-provider-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 0.4rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  color: var(--primary);
+}
+
+.observability-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+}
+
+.metric-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
